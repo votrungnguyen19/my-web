@@ -7,6 +7,10 @@
     <title>Kiểm tra thông tin kết nối</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: Arial, sans-serif;
             background: #f4f6f8;
@@ -21,11 +25,15 @@
             background: white;
             padding: 30px;
             border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
             margin-bottom: 10px;
+        }
+
+        p {
+            line-height: 1.6;
         }
 
         button {
@@ -36,10 +44,16 @@
             cursor: pointer;
             background: #24292f;
             color: white;
+            margin-top: 10px;
         }
 
         button:hover {
             opacity: 0.85;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         #result {
@@ -61,6 +75,19 @@
             font-size: 14px;
             margin: 15px 0 25px;
         }
+
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #198754;
+        }
+
+        .error {
+            color: #dc3545;
+        }
     </style>
 </head>
 
@@ -71,18 +98,22 @@
     <h1>Thông tin kết nối</h1>
 
     <p>
-        Bấm nút bên dưới để kiểm tra thông tin kết nối
-        mà trình duyệt cho phép trang web truy cập.
+        Trang web có thể kiểm tra một số thông tin mà
+        trình duyệt cho phép truy cập.
     </p>
 
     <p class="note">
-        Trang chỉ hiển thị thông tin trên trình duyệt và không tự động
-        gửi thông tin này cho chủ website.
+        Khi bấm "Tôi đồng ý và kiểm tra", trang sẽ lấy IP công khai
+        và một số thông tin do trình duyệt cung cấp. Các thông tin
+        này sẽ được gửi về hệ thống của website để phục vụ mục đích
+        kiểm tra và thực hành.
     </p>
 
-    <button onclick="getInfo()">
-        Kiểm tra thông tin
+    <button id="checkButton" onclick="getInfo()">
+        Tôi đồng ý và kiểm tra
     </button>
+
+    <div id="status"></div>
 
     <div id="result">
 
@@ -122,49 +153,285 @@
 
 </div>
 
+
 <script>
 
 async function getInfo() {
 
-    document.getElementById("result").style.display = "block";
+    const button =
+        document.getElementById("checkButton");
 
-    // Lấy IP công khai
+    const result =
+        document.getElementById("result");
+
+    const status =
+        document.getElementById("status");
+
+    // Hiển thị kết quả
+    result.style.display = "block";
+
+    // Khóa nút trong lúc xử lý
+    button.disabled = true;
+
+    button.textContent =
+        "Đang kiểm tra...";
+
+    status.textContent =
+        "Đang thu thập thông tin...";
+
+    status.className = "";
+
+
+    // ==================================================
+    // URL CLOUDFLARE WORKER
+    // ==================================================
+
+    const WORKER_URL =
+        "https://my-web-collector.nguyen19042005.workers.dev";
+
+
+    // ==================================================
+    // BIẾN LƯU THÔNG TIN
+    // ==================================================
+
+    let publicIP =
+        "Không lấy được IP";
+
+
+    let userAgent =
+        navigator.userAgent;
+
+
+    let language =
+        navigator.language || "unknown";
+
+
+    let screenInfo =
+        screen.width + " × " + screen.height;
+
+
+    let timezone =
+        "unknown";
+
+
+    let accessTime =
+        new Date().toISOString();
+
+
+    // ==================================================
+    // 1. LẤY IP CÔNG KHAI
+    // ==================================================
+
     try {
 
         const response =
-            await fetch("https://api.ipify.org?format=json");
+            await fetch(
+                "https://api.ipify.org?format=json"
+            );
 
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error("Không lấy được IP");
+        }
 
-        document.getElementById("ip").textContent =
-            data.ip;
+        const data =
+            await response.json();
+
+        if (data.ip) {
+
+            publicIP =
+                data.ip;
+
+        }
 
     } catch (error) {
 
-        document.getElementById("ip").textContent =
+        publicIP =
             "Không lấy được IP";
+    }
+
+
+    document.getElementById("ip").textContent =
+        publicIP;
+
+
+    // ==================================================
+    // 2. TRÌNH DUYỆT / HỆ ĐIỀU HÀNH
+    // ==================================================
+
+    document.getElementById("browser").textContent =
+        userAgent;
+
+
+    // ==================================================
+    // 3. NGÔN NGỮ
+    // ==================================================
+
+    document.getElementById("language").textContent =
+        language;
+
+
+    // ==================================================
+    // 4. KÍCH THƯỚC MÀN HÌNH
+    // ==================================================
+
+    document.getElementById("screen").textContent =
+        screenInfo;
+
+
+    // ==================================================
+    // 5. MÚI GIỜ
+    // ==================================================
+
+    try {
+
+        timezone =
+            Intl.DateTimeFormat()
+                .resolvedOptions()
+                .timeZone || "unknown";
+
+    } catch (error) {
+
+        timezone =
+            "unknown";
+    }
+
+
+    document.getElementById("timezone").textContent =
+        timezone;
+
+
+    // ==================================================
+    // 6. THỜI GIAN TRUY CẬP
+    // ==================================================
+
+    document.getElementById("time").textContent =
+        new Date(accessTime)
+            .toLocaleString("vi-VN");
+
+
+    // ==================================================
+    // 7. TẠO DỮ LIỆU GỬI VỀ WORKER
+    // ==================================================
+
+    const visitorData = {
+
+        ip: publicIP,
+
+        userAgent: userAgent,
+
+        language: language,
+
+        screen: screenInfo,
+
+        timezone: timezone,
+
+        timestamp: accessTime
+
+    };
+
+
+    // ==================================================
+    // 8. GỬI DỮ LIỆU ĐẾN CLOUDFLARE WORKER
+    // ==================================================
+
+    try {
+
+        const response =
+            await fetch(
+                WORKER_URL,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(
+                            visitorData
+                        )
+                }
+            );
+
+
+        // Kiểm tra phản hồi
+        const responseText =
+            await response.text();
+
+
+        let workerResult;
+
+        try {
+
+            workerResult =
+                JSON.parse(responseText);
+
+        } catch {
+
+            workerResult = {
+                ok: false,
+                message: responseText
+            };
+
+        }
+
+
+        // ==================================================
+        // 9. HIỂN THỊ TRẠNG THÁI
+        // ==================================================
+
+        if (
+            response.ok &&
+            workerResult.ok
+        ) {
+
+            status.textContent =
+                "✓ Thông tin đã được gửi thành công.";
+
+            status.className =
+                "success";
+
+        } else {
+
+            status.textContent =
+                "⚠ Kiểm tra thông tin thành công nhưng chưa gửi được dữ liệu.";
+
+            status.className =
+                "error";
+
+            console.error(
+                "Worker error:",
+                workerResult
+            );
+        }
+
+
+    } catch (error) {
+
+        status.textContent =
+            "⚠ Không thể kết nối đến máy chủ.";
+
+        status.className =
+            "error";
+
+        console.error(
+            "Connection error:",
+            error
+        );
 
     }
 
-    // Thông tin trình duyệt / hệ điều hành
-    document.getElementById("browser").textContent =
-        navigator.userAgent;
 
-    // Ngôn ngữ
-    document.getElementById("language").textContent =
-        navigator.language;
+    // ==================================================
+    // 10. MỞ LẠI NÚT
+    // ==================================================
 
-    // Màn hình
-    document.getElementById("screen").textContent =
-        screen.width + " × " + screen.height;
+    button.disabled = false;
 
-    // Múi giờ
-    document.getElementById("timezone").textContent =
-        Intl.DateTimeFormat().resolvedOptions().timeZone;
+    button.textContent =
+        "Kiểm tra lại";
 
-    // Thời gian
-    document.getElementById("time").textContent =
-        new Date().toLocaleString("vi-VN");
 }
 
 </script>
